@@ -10,6 +10,8 @@ import { useBABTBalanceOf } from '@/hooks/useContract';
 import { gamerEmailInfoAtom } from '@/store/gamer/state';
 import Popover from '../popover';
 import { useLogoutCallback } from '@/hooks/user';
+import { useTokenBalance } from '../../hooks/useTokenBalance'; // Adjust path if necessary
+import { useWeb3React } from '@web3-react/core';
 
 function Web3StatusInner() {
   const { address, connector } = useAccount();
@@ -29,6 +31,12 @@ function Web3StatusInner() {
 
   if (address) {
     return (
+       {account && (
+            <div>
+                <p>Address: {account}</p>
+                <p>Your Token Balance: {tokenBalance}</p> {/* Display the balance */}
+            </div>
+        )}
       <Popover
         placement="bottom-end"
         className="z-40 border-none bg-transparent"
