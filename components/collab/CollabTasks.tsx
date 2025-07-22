@@ -1,0 +1,243 @@
+import { useCallback, useEffect, useState } from 'react';
+import dayjs from 'dayjs';
+import ReactGA from 'react-ga4';
+import { useAccount } from 'wagmi';
+import { toast } from 'react-toastify';
+import { useRecoilValue } from 'recoil';
+import { useMutation } from '@tanstack/react-query';
+import { fetchCollabTweetVerify } from '../../lib/api';
+import { referralCodeAtom } from '../../store/invite/state';
+import Button from '../button';
+import Message from '../message';
+import { CollabSocials } from '../socialMedia/CollabSocials';
+import CollabTaskItem from './CollabTaskItem';
+import { useCollabIsJoined, useCollabIsNftHolder, useCollabTimes } from '../../hooks/collab';
+import { COLLAB_NFT_STATUS, COLLAB_TIME_STATUS } from '../../constants';
+import { useIsMounted } from '../../hooks/useIsMounted';
+import type { Response, CollabInfoType, CollabUserInfo, CollabTweetVerifyParams } from '../../lib/types';
+
+export type CollabTasksProps = {
+  data: CollabInfoType;
+};
+
+export default function CollabTasks({ data }: CollabTasksProps) {
+  const {
+    taskGleam,
+    taskGalxe,
+    taskQuest3,
+    taskPort3,
+    taskTweetContent,
+    timeComingSoon,
+    timeJoin,
+    timeAllocation,
+    timeClaim,
+    timeClose,
+    collabCode,
+  } = data;
+  const [isJoinDisable, setIsJoinDisable] = useState<boolean>(false);
+  const referralCode = useRecoilValue(referralCodeAtom);
+  const { address } = useAccount();
+  const [value, setValue] = useState('');
+  const isNFTholder = useCollabIsNftHolder();
+  const isJoined = useCollabIsJoined();
+  const isMounted = useIsMounted();
+  const { timeStatus } = useCollabTimes({ timeComingSoon, timeJoin, timeAllocation, timeClaim, timeClose });
+
+  const mutationVerify = useMutation<Response<CollabUserInfo>, any, CollabTweetVerifyParams, any>(
+    (data) => fetchCollabTweetVerify(data),
+    {
+      onSuccess: (data) => {
+        if (!data?.data?.taskTweetStatus) {
+          toast.error(<Message message="Verify failed!" />);
+          return;
+        }
+        toast.success(<Message message="Verify successfully!" />);
+      },
+    },
+  );
+
+  const handleTwitterShareClick = useCallback(() => {
+    ReactGA.event({ action: 'Collab-Item', category: 'Click', label: 'twitter' });
+    const referralLink = window.location.origin + window.location.pathname + (referralCode ? `?code=${referralCode}` : '');
+    const url = encodeURIComponent(referralLink);
+    const text = encodeURIComponent(taskTweetContent || '');
+    window.open('https://twitter.com/intent/tweet?text=' + text + '&url=' + url, '_blank');
+  }, [taskTweetContent, referralCode]);
+
+  const handleVerify = useCallback(() => {
+    ReactGA.event({ action: 'Collab-Item', category: 'Click', label: 'verify' });
+    if (!address) {
+      toast.error(<Message message="Please connect your wallet first." title="Oops" />);
+      return;
+    }
+    const reg = new RegExp(/(https:\/\/twitter.com\/.*\/status\/)([0-9]{19})/);
+    if (reg.test(value)) {
+      mutationVerify.mutate({ collabCode, walletAddress: address, taskTweetUrl: value });
+    } else toast.error(<Message message="Not a legitimate twitter link!" />);
+  }, [mutationVerify, value, collabCode, address]);
+
+  useEffect(() => {
+    const now = dayjs().unix();
+    const isOpen = now > data.timeJoin && now < data.timeAllocation;
+    setIsJoinDisable(!isOpen);
+  }, [data.timeAllocation, data.timeJoin]);
+
+  const generateAirdropTask = useCallback(() => {
+    const taskProps = {
+      key: 'airdrop',
+      title: 'Genesis Airdrop',
+      icon: <div className="aspect-[2.19/1] h-7 max-w-[70px] bg-p12-logo-white bg-cover"></div>,
+      content: 'Go to P12 Genesis Soul-Bound NFT Airdrop to claim P12 Airdrop NFT.',
+      gaKey: 'airdrop',
+      className: 'flex-grow w-full',
+    };
+    const normal = 'To P12 Genesis Airdrop';
+    const noConnect = 'Please connect your wallet first.';
+    const noNFTinJoined = (
+      <>
+        You are not Holder, please{' '}
+        <a
+          className="font-semibold text-[#43BBFF]"
+          href="/gamer"
+          target="_blank"
+          onClick={() =>
+            ReactGA.event({
+              action: 'Collab-Item',
+              category: 'Click',
+              label: 'airdrop-none-nft',
+            })
+          }
+        >
+          Click
+        </a>{' '}
+        here to claim.
+      </>
+    ); // You are not Holder, please Click here to claim.
+    if (timeStatus === COLLAB_TIME_STATUS.UPCOMING) return <CollabTaskItem {...taskProps} href="/" hrefLabel={normal} />;
+    if (isNFTholder === COLLAB_NFT_STATUS.UN_CONNECT) return <CollabTaskItem {...taskProps} errorLabel={noConnect} />;
+    if (timeStatus === COLLAB_TIME_STATUS.JOIN) {
+      // joined and not holder
+      if (isJoined && isNFTholder !== COLLAB_NFT_STATUS.IS_HOLDER)
+        return <CollabTaskItem {...taskProps} errorLabel={noNFTinJoined} />;
+    }
+    return <CollabTaskItem {...taskProps} href="/gamer" hrefLabel={normal} />;
+  }, [timeStatus, isJoined, isNFTholder]);
+
+  if (!isMounted) return null;
+
+  return (
+    <div className="mt-9 flex flex-col gap-1" id="collabTasks">
+      {taskTweetContent ? (
+        <>
+          <h1 className="text-3xl font-semibold leading-9">How To Get Bounties</h1>
+          <p className="text-sm leading-7 text-[#9A9DAA]">
+            Click the above Join Button and finish the following steps to participate the giveaway.
+          </p>
+        </>
+      ) : null}
+      <div className="mt-4 flex flex-nowrap gap-7 md:flex-wrap">
+        {taskTweetContent ? null : (
+          <div className="flex w-full flex-col gap-5">
+            <h1 className="mt-7 text-3xl font-semibold leading-9">How To Get Bounties</h1>
+            <p className="text-sm leading-7 text-[#9A9DAA]">
+              Click the above Join Button and finish the following steps to participate the giveaway.
+            </p>
+          </div>
+        )}
+        {generateAirdropTask()}
+
+        {taskGleam ? (
+          <CollabTaskItem
+            className="w-full flex-grow"
+            key="gleam"
+            gaKey="gleam"
+            title="Gleam"
+            icon={<img className="h-8" src="/img/collab/gleam.png" alt="gleam icon" />}
+            content="Complete all required tasks on Gleam is a must step."
+            href={taskGleam}
+            target="_blank"
+            hrefLabel="To Gleam"
+          />
+        ) : null}
+
+        {taskQuest3 ? (
+          <CollabTaskItem
+            className="w-full flex-grow"
+            key="quest3"
+            gaKey="quest3"
+            title=""
+            icon={<img className="h-8" src="/img/collab/questn.webp" alt="gleam icon" />}
+            content="Complete all tasks on QuestN is a must step."
+            href={taskQuest3}
+            target="_blank"
+            hrefLabel="To QuestN"
+          />
+        ) : null}
+
+        {taskPort3 ? (
+          <CollabTaskItem
+            className="w-full flex-grow"
+            key="port3"
+            gaKey="port3"
+            title=""
+            icon={<img className="h-8" src="/img/collab/port3.svg" alt="port3 icon" />}
+            content="Finish tasks on Port3 to join the giveaway raffle."
+            href={taskPort3}
+            target="_blank"
+            hrefLabel="To Port3"
+          />
+        ) : null}
+
+        {taskGalxe ? (
+          <CollabTaskItem
+            className="w-full flex-grow"
+            key="galxe"
+            gaKey="galxe"
+            title=""
+            icon={<img className="h-8" src="/img/collab/galxe.svg" alt="gleam icon" />}
+            content="Directly claim your reward on Galxe after finishing tasks."
+            href={taskGalxe}
+            target="_blank"
+            hrefLabel="To Galxe"
+          />
+        ) : null}
+
+        {taskTweetContent ? (
+          <CollabTaskItem
+            className="w-full flex-grow"
+            key="share"
+            title="Share"
+            icon={<img className="aspect-square h-8" src="/img/collab/share.png" alt="Share icon" />}
+            content={
+              <>
+                <span>Click button to make a tweet</span>
+                <CollabSocials
+                  onClick={handleTwitterShareClick}
+                  icon="/svg/twitter.svg"
+                  label="Send Twitter"
+                  className="bg-[#02A9F4]/100"
+                />
+                <span>
+                  Then copy-paste the tweet URL into the below input box{' '}
+                  <img className="inline" src={'/svg/down-2.svg'} alt="down-icon" />
+                </span>
+              </>
+            }
+          >
+            <div className="flex h-11 gap-3">
+              <input
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                className="w-full rounded-full bg-[#494E69]/60 px-5 leading-4 hover:bg-[#494E69]/80"
+                placeholder="Paste the tweet URL"
+              />
+              <Button type="gradient" disabled={isJoinDisable} className="w-28 min-w-fit flex-grow" onClick={handleVerify}>
+                Verify
+              </Button>
+            </div>
+          </CollabTaskItem>
+        ) : null}
+      </div>
+    </div>
+  );
+}
